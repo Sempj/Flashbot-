@@ -17,7 +17,6 @@ const FLASH_TOKEN = "0x55d398326f99059fF775485246999027B3197955"; // Example USD
 const PANCAKE_ROUTER = "0x10ED43C718714eb63d5aa57b78b54704e256024e";
 
 const SCAN_INTERVAL = 10000; // ms
-const MIN_PROFIT_BNB = 0.01;
 
 // ---------------------------
 // PROVIDER + WALLET
@@ -72,7 +71,6 @@ app.post('/withdraw', async (req, res) => {
     const balance = await token.balanceOf(wallet.address);
     if (balance.isZero()) return res.send("No funds to withdraw");
 
-    // For demonstration, we assume profits are in FLASH_TOKEN
     const tx = await token.transfer(wallet.address, balance);
     await tx.wait();
     res.send(`✅ Withdrawn ${ethers.utils.formatEther(balance)} tokens to wallet`);
@@ -83,14 +81,14 @@ app.post('/withdraw', async (req, res) => {
 });
 
 // ---------------------------
-// BOT LOOP (simulation for now)
+// BOT LOOP (placeholder)
 // ---------------------------
 async function startBot() {
   console.log("🚀 FlashBot started...");
   setInterval(async () => {
     try {
-      // Replace this with your real arbitrage logic
       console.log("🔎 Scanning for profitable trades...");
+      // Insert your real flash loan arbitrage logic here
     } catch (err) {
       console.error("Bot error:", err.message);
     }
