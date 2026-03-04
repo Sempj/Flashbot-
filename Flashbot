@@ -1,0 +1,107 @@
+require('dotenv').config();
+const express = require('express');
+const bodyParser = require('body-parser');
+const session = require('express-session');
+const helmet = require('helmet');
+const { ethers } = require('ethers');
+
+// ---------------------------
+// CONFIG
+// ---------------------------
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const BSC_RPC = process.env.BSC_RPC || "https://bsc-dataseed.binance.org/";
+const PORT = process.env.PORT || 3000;
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || "1234";
+
+const FLASH_TOKEN = "0x55d398326f99059fF775485246999027B3197955"; // Example USDT
+const TARGET_TOKEN = "0x55d398326f99059fF775485246999027B3197955"; // Example BUSD/USDT
+const PANCAKE_ROUTER = "0x10ED43C718714eb63d5aa57b78b54704e256024e";
+
+const SCAN_INTERVAL = 10000; // ms
+const MIN_PROFIT_BNB = 0.01;
+
+// ---------------------------
+// PROVIDER + WALLET
+// ---------------------------
+const provider = new ethers.JsonRpcProvider(BSC_RPC);
+const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+
+// ---------------------------
+// EXPRESS DASHBOARD
+// ---------------------------
+const app = express();
+app.use(helmet());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(session({ secret: 'flashbotsecret', resave: false, saveUninitialized: true }));
+
+// Simple login
+app.get('/', (req, res) => {
+  if (!req.session.auth) {
+    res.send(`<form method="POST">
+                <input type="password" name="password" placeholder="Password"/>
+                <button type="submit">Login</button>
+              </form>`);
+  } else {
+    res.send(`<h2>FlashBot Dashboard</h2>
+              <p>Wallet: ${wallet.address}</p>
+              <form method="POST" action="/withdraw">
+                <button type="submit">Withdraw All Profits to Wallet</button>
+              </form>`);
+  }
+});
+
+app.post('/', (req, res) => {
+  if (req.body.password === DASHBOARD_PASSWORD) {
+    req.session.auth = true;
+  }
+  res.redirect('/');
+});
+
+// ---------------------------
+// WITHDRAW ENDPOINT
+// ---------------------------
+app.post('/withdraw', async (req, res) => {
+  if (!req.session.auth) return res.status(403).send("Not authorized");
+
+  try {
+    const tokenAbi = [
+      "function balanceOf(address account) view returns (uint256)",
+      "function transfer(address recipient, uint256 amount) returns (bool)"
+    ];
+    const token = new ethers.Contract(FLASH_TOKEN, tokenAbi, wallet);
+
+    const balance = await token.balanceOf(wallet.address);
+    if (balance.isZero()) return res.send("No funds to withdraw");
+
+    // For demonstration, we assume profits are in FLASH_TOKEN
+    const tx = await token.transfer(wallet.address, balance);
+    await tx.wait();
+    res.send(`✅ Withdrawn ${ethers.utils.formatEther(balance)} tokens to wallet`);
+  } catch (err) {
+    console.error(err);
+    res.send("Error withdrawing: " + err.message);
+  }
+});
+
+// ---------------------------
+// BOT LOOP (simulation for now)
+// ---------------------------
+async function startBot() {
+  console.log("🚀 FlashBot started...");
+  setInterval(async () => {
+    try {
+      // Here you would place real arbitrage scanning logic
+      console.log("🔎 Scanning for profitable trades...");
+    } catch (err) {
+      console.error("Bot error:", err.message);
+    }
+  }, SCAN_INTERVAL);
+}
+
+// ---------------------------
+// START SERVER + BOT
+// ---------------------------
+app.listen(PORT, () => {
+  console.log(`🌐 Dashboard running at http://localhost:${PORT}`);
+});
+startBot();
