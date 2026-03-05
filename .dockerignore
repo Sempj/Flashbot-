@@ -10,17 +10,18 @@ npm-debug.log
 Dockerfile
 fly.toml # Fly.io configuration file
 
-# Environment / Configuration Files
+# Environment/Configuration Files
 .env
 .DS_Store
 *.log
 
-# Development / Testing files and directories
+# Development/Testing files and directories (adjust as needed)
 test
 tests
 docs
 coverage
 tmp
 *~
+# Any files generated during development or testing, e.g.:
 dist
 build
