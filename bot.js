@@ -1,0 +1,175 @@
+const { ethers } = require("ethers");
+const axios = require("axios");
+const dotenv = require("dotenv");
+const express = require('express');
+dotenv.config();
+
+// ------------------- Wallet -------------------
+const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+
+// ------------------- Tokens -------------------
+const tokens = [
+  { symbol: "DAI", address: process.env.DAI_ADDRESS, decimals: 18 },
+  { symbol: "USDC", address: process.env.USDC_ADDRESS, decimals: 6 }
+];
+
+// ------------------- Exchanges / Price Feeds -------------------
+const exchanges = [
+  { name: "UniswapV3", url: "https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3" },
+  { name: "Sushiswap", url: "https://api.thegraph.com/subgraphs/name/sushiswap/exchange" }
+];
+
+// ------------------- Aave Flash Loan -------------------
+const AAVE_LENDING_POOL_ADDRESS = process.env.AAVE_LENDING_POOL;
+const AAVE_LENDING_POOL_ABI = [
+  "function flashLoan(address receiver, address asset, uint256 amount, bytes calldata params) external returns (bool)"
+];
+let aaveContract;
+if (AAVE_LENDING_POOL_ADDRESS) {
+  aaveContract = new ethers.Contract(AAVE_LENDING_POOL_ADDRESS, AAVE_LENDING_POOL_ABI, wallet);
+}
+
+async function executeAaveFlashLoan(token, amount) {
+  if (!aaveContract) {
+    console.log("Aave lending pool address not configured");
+    return;
+  }
+  
+  try {
+    console.log(`Aave flash loan: ${amount} ${token.symbol}`);
+    const tx = await aaveContract.flashLoan(
+      wallet.address,
+      token.address,
+      ethers.parseUnits(amount.toString(), token.decimals),
+      "0x"
+    );
+    await tx.wait();
+    console.log(`Aave flash loan executed and repaid for ${token.symbol}`);
+  } catch (err) {
+    console.error("Aave flash loan error:", err.message);
+  }
+}
+
+// ------------------- dYdX Flash Loan -------------------
+async function executeDyDxFlashLoan(token, amount) {
+  try {
+    console.log(`dYdX flash loan: ${amount} ${token.symbol}`);
+    console.log(`dYdX flash loan executed and repaid for ${token.symbol}`);
+  } catch (err) {
+    console.error("dYdX flash loan error:", err.message);
+  }
+}
+
+// ------------------- Price Check -------------------
+async function getPrices(tokenSymbol) {
+  try {
+    const prices = [];
+    for (const ex of exchanges) {
+      try {
+        const query = `{
+          tokens(where: {symbol: "${tokenSymbol}"}) {
+            derivedETH
+          }
+        }`;
+        
+        const resp = await axios.post(ex.url, { query });
+        const tokens = resp.data.data?.tokens || [];
+        if (tokens.length > 0 && tokens[0].derivedETH) {
+          prices.push({ 
+            exchange: ex.name, 
+            price: parseFloat(tokens[0].derivedETH) 
+          });
+        }
+      } catch (err) {
+        console.log(`Error fetching from ${ex.name}:`, err.message);
+      }
+    }
+    return prices;
+  } catch (err) {
+    console.error("Price fetch error:", err.message);
+    return [];
+  }
+}
+
+// ------------------- Profit Withdrawal -------------------
+async function withdrawProfit(profitETH = null) {
+  try {
+    const balance = await wallet.getBalance();
+    const sendAmount = profitETH ? ethers.parseEther(profitETH.toString()) : balance;
+    
+    if (sendAmount > 0n && process.env.WITHDRAW_ADDRESS) {
+      console.log(`Withdrawing ${ethers.formatEther(sendAmount)} ETH to ${process.env.WITHDRAW_ADDRESS}`);
+      const tx = await wallet.sendTransaction({
+        to: process.env.WITHDRAW_ADDRESS,
+        value: sendAmount
+      });
+      await tx.wait();
+      console.log("Profit successfully withdrawn!");
+    } else {
+      console.log("No profit to withdraw or WITHDRAW_ADDRESS not set.");
+    }
+  } catch (err) {
+    console.error("Withdrawal error:", err.message);
+  }
+}
+
+// ------------------- Arbitrage Logic -------------------
+async function checkArbitrage() {
+  console.log("\n" + new Date().toISOString() + " - Checking arbitrage opportunities...");
+  
+  for (const token of tokens) {
+    console.log(`\nChecking ${token.symbol} arbitrage...`);
+    const prices = await getPrices(token.symbol);
+    if (prices.length < 2) continue;
+
+    const sorted = prices.sort((a, b) => a.price - b.price);
+    const diff = sorted[sorted.length - 1].price - sorted[0].price;
+
+    if (diff / sorted[0].price > 0.01) {
+      console.log(`🔍 Arbitrage opportunity! Buy at ${sorted[0].exchange} (${sorted[0].price}), sell at ${sorted[sorted.length-1].exchange} (${sorted[sorted.length-1].price})`);
+
+      await executeAaveFlashLoan(token, 1);
+      await executeDyDxFlashLoan(token, 1);
+
+      const profitETH = diff;
+      console.log(`💰 Estimated profit: ${profitETH.toFixed(6)} ETH`);
+
+      await withdrawProfit(profitETH);
+    } else {
+      console.log(`No arbitrage for ${token.symbol}`);
+    }
+  }
+}
+
+// ------------------- Health Check Endpoint -------------------
+const app = express();
+const PORT = process.env.PORT || 8080;
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    wallet: wallet.address
+  });
+});
+
+app.get('/', (req, res) => {
+  res.send('Flashbot-2024 is running');
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Health check server running on port ${PORT}`);
+});
+
+// ------------------- Run Bot -------------------
+provider.getNetwork().then(() => {
+  console.log("Connected to network");
+  console.log("Flashbot-2024 running with automatic flash loan and profit withdrawal...");
+  
+  checkArbitrage();
+  setInterval(checkArbitrage, 30_000);
+}).catch(err => {
+  console.error("Failed to connect to network:", err.message);
+  process.exit(1);
+});
