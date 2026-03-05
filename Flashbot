@@ -1,148 +1,110 @@
-# -----------------------------
-# Flashbot-2024: Dockerfile + Bot Code + Fly.io ready
-# -----------------------------
-FROM node:18
+flyctl deploy --build-only --push -a flashbot-2024 --image-label deployment-a04fa9d6d2abd4e130ed0af296b9fee8 --config fly.toml
+==> Verifying app config
+--> Verified app config
+Validating fly.toml
+[32m✓[0m Configuration is valid
+==> Building image
+Waiting for depot builder...
 
-WORKDIR /usr/src/app
+==> Building image with Depot
+--> build:  (​)
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 682B done
+#1 DONE 0.0s
 
-# -----------------------------
-# Create package.json inside container
-# -----------------------------
-RUN echo '{
-  "name": "flashbot-2024",
-  "version": "1.0.0",
-  "description": "Flash loan arbitrage bot",
-  "type": "module",
-  "main": "bot.js",
-  "scripts": { "start": "node bot.js" },
-  "dependencies": {
-    "ethers": "^6.6.2",
-    "axios": "^1.6.4",
-    "dotenv": "^16.3.1",
-    "@dydxprotocol/v3-client": "^3.0.3"
-  }
-}' > package.json
+#2 [internal] load metadata for docker.io/library/node:18
+#2 DONE 0.2s
 
-# -----------------------------
-# Install dependencies
-# -----------------------------
-RUN npm install
+#3 [internal] load .dockerignore
+#3 transferring context: 348B done
+#3 DONE 0.0s
 
-# -----------------------------
-# Add bot.js with flash loan + arbitrage logic
-# -----------------------------
-RUN echo 'import { ethers } from "ethers";
-import axios from "axios";
-import dotenv from "dotenv";
-dotenv.config();
+#4 [build 1/5] FROM docker.io/library/node:18@sha256:c6ae79e38498325db67193d391e6ec1d224d96c693a8a4d943498556716d3783
+#4 resolve docker.io/library/node:18@sha256:c6ae79e38498325db67193d391e6ec1d224d96c693a8a4d943498556716d3783 done
+#4 DONE 0.0s
 
-// Wallet
-const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, new ethers.JsonRpcProvider(process.env.RPC_URL));
+#5 [build 2/5] WORKDIR /usr/src/app
+#5 CACHED
 
-// Tokens
-const tokens = [
-  { symbol: "DAI", address: process.env.DAI_ADDRESS, decimals: 18 },
-  { symbol: "USDC", address: process.env.USDC_ADDRESS, decimals: 6 }
-];
+#6 [internal] load build context
+#6 transferring context: 6.02kB done
+#6 DONE 0.0s
 
-// Exchanges
-const exchanges = [
-  { name: "UniswapV3", url: "https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3" },
-  { name: "Sushiswap", url: "https://api.thegraph.com/subgraphs/name/sushiswap/exchange" }
-];
+#7 [build 3/5] COPY package*.json ./
+#7 CACHED
 
-// Aave Flash Loan
-const AAVE_LENDING_POOL_ADDRESS = process.env.AAVE_LENDING_POOL;
-const AAVE_LENDING_POOL_ABI = [
-  "function flashLoan(address receiver, address asset, uint256 amount, bytes calldata params) external"
-];
-const aaveContract = new ethers.Contract(AAVE_LENDING_POOL_ADDRESS, AAVE_LENDING_POOL_ABI, wallet);
-async function executeAaveFlashLoan(token, amount) {
-  try {
-    console.log(`Aave flash loan: ${amount} ${token.symbol}`);
-    const tx = await aaveContract.flashLoan(wallet.address, token.address, ethers.parseUnits(amount.toString(), token.decimals), "0x");
-    await tx.wait();
-    console.log(`Aave flash loan executed and repaid for ${token.symbol}`);
-  } catch (err) { console.error("Aave flash loan error:", err); }
-}
+#8 [build 4/5] RUN npm install
+#8 0.469 npm error code ENOENT
+#8 0.469 npm error syscall open
+#8 0.469 npm error path /usr/src/app/package.json
+#8 0.470 npm error errno -2
+#8 0.470 npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/usr/src/app/package.json'
+#8 0.470 npm error enoent This is related to npm not being able to find a file.
+#8 0.470 npm error enoent
+#8 0.471 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-03-05T00_26_56_411Z-debug-0.log
+#8 ERROR: process "/bin/sh -c npm install" did not complete successfully: exit code: 254
+------
+ > [build 4/5] RUN npm install:
+0.469 npm error code ENOENT
+0.469 npm error syscall open
+0.469 npm error path /usr/src/app/package.json
+0.470 npm error errno -2
+0.470 npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/usr/src/app/package.json'
+0.470 npm error enoent This is related to npm not being able to find a file.
+0.470 npm error enoent
+0.471 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-03-05T00_26_56_411Z-debug-0.log
+------
+==> Building image
+Waiting for depot builder...
 
-// dYdX Flash Loan
-import { Client as DyDxClient, SoloMargin } from "@dydxprotocol/v3-client";
-async function executeDyDxFlashLoan(token, amount) {
-  try {
-    console.log(`dYdX flash loan: ${amount} ${token.symbol}`);
-    const client = new DyDxClient({ networkId: 1, provider: wallet.provider });
-    const solo = new SoloMargin(client);
-    const marketId = token.symbol.toLowerCase();
-    const tx = await solo.flashLoan({ receiver: wallet.address, marketId, amount: ethers.parseUnits(amount.toString(), token.decimals), data: "0x" });
-    await tx.wait();
-    console.log(`dYdX flash loan executed and repaid for ${token.symbol}`);
-  } catch (err) { console.error("dYdX flash loan error:", err); }
-}
+==> Building image with Depot
+--> build:  (​)
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 682B done
+#1 DONE 0.0s
 
-// Price Check
-async function getPrices(tokenSymbol) {
-  try {
-    const prices = [];
-    for (const ex of exchanges) {
-      const query = `{ token(id: "${tokenSymbol.toLowerCase()}") { derivedETH } }`;
-      const resp = await axios.post(ex.url, { query });
-      prices.push({ exchange: ex.name, price: parseFloat(resp.data.data.token?.derivedETH || 0) });
-    }
-    return prices;
-  } catch (err) { console.error("Price fetch error:", err); return []; }
-}
+#2 [internal] load metadata for docker.io/library/node:18
+#2 DONE 0.2s
 
-// Arbitrage Logic
-async function checkArbitrage() {
-  for (const token of tokens) {
-    console.log(`\\nChecking ${token.symbol} arbitrage...`);
-    const prices = await getPrices(token.symbol);
-    if (prices.length < 2) continue;
-    const sorted = prices.sort((a,b)=>a.price-b.price);
-    const diff = sorted[sorted.length-1].price - sorted[0].price;
-    if(diff/sorted[0].price>0.01){
-      console.log(`Arbitrage opportunity! Buy at ${sorted[0].exchange} (${sorted[0].price}), sell at ${sorted[sorted.length-1].exchange} (${sorted[sorted.length-1].price})`);
-      await executeAaveFlashLoan(token, 1);
-      await executeDyDxFlashLoan(token, 1);
-      const profitETH = sorted[sorted.length-1].price - sorted[0].price;
-      console.log(`Estimated profit: ${profitETH.toFixed(6)} ETH`);
-      await walletWithdrawal();
-    } else { console.log(`No arbitrage for ${token.symbol}`); }
-  }
-}
+#3 [internal] load .dockerignore
+#3 transferring context: 348B 0.0s done
+#3 DONE 0.0s
 
-// Wallet Withdrawal
-async function walletWithdrawal() {
-  try {
-    const balance = await wallet.getBalance();
-    console.log(`Wallet balance: ${ethers.formatEther(balance)} ETH`);
-    if(process.env.WITHDRAW_ADDRESS){
-      const tx = await wallet.sendTransaction({ to: process.env.WITHDRAW_ADDRESS, value: balance });
-      await tx.wait();
-      console.log(`Wallet withdrawn to ${process.env.WITHDRAW_ADDRESS}`);
-    }
-  } catch(err){ console.error("Wallet withdrawal error:", err); }
-}
+#4 [build 1/5] FROM docker.io/library/node:18@sha256:c6ae79e38498325db67193d391e6ec1d224d96c693a8a4d943498556716d3783
+#4 resolve docker.io/library/node:18@sha256:c6ae79e38498325db67193d391e6ec1d224d96c693a8a4d943498556716d3783 done
+#4 DONE 0.0s
 
-// Run bot
-setInterval(checkArbitrage, 30_000);
-console.log("Flashbot-2024 running with Aave + dYdX flash loans, automatic repayment and profit logging...");
-' > bot.js
+#5 [build 2/5] WORKDIR /usr/src/app
+#5 CACHED
 
-# -----------------------------
-# Expose port and run bot
-# -----------------------------
-EXPOSE 8080
-CMD ["node","bot.js"]
+#6 [internal] load build context
+#6 transferring context: 87B done
+#6 DONE 0.0s
 
-# -----------------------------
-# Fly.io environment variables
-# -----------------------------
-# PRIVATE_KEY
-# RPC_URL
-# DAI_ADDRESS
-# USDC_ADDRESS
-# AAVE_LENDING_POOL
-# WITHDRAW_ADDRESS
-# DYDX_ENDPOINT (optional)
+#7 [build 3/5] COPY package*.json ./
+#7 CACHED
+
+#8 [build 4/5] RUN npm install
+#8 0.467 npm error code ENOENT
+#8 0.467 npm error syscall open
+#8 0.467 npm error path /usr/src/app/package.json
+#8 0.467 npm error errno -2
+#8 0.468 npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/usr/src/app/package.json'
+#8 0.468 npm error enoent This is related to npm not being able to find a file.
+#8 0.468 npm error enoent
+#8 0.468 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-03-05T00_26_57_864Z-debug-0.log
+#8 ERROR: process "/bin/sh -c npm install" did not complete successfully: exit code: 254
+------
+ > [build 4/5] RUN npm install:
+0.467 npm error code ENOENT
+0.467 npm error syscall open
+0.467 npm error path /usr/src/app/package.json
+0.467 npm error errno -2
+0.468 npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/usr/src/app/package.json'
+0.468 npm error enoent This is related to npm not being able to find a file.
+0.468 npm error enoent
+0.468 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-03-05T00_26_57_864Z-debug-0.log
+------
+Error: failed to fetch an image or build from source: error building: failed to solve: process "/bin/sh -c npm install" did not complete successfully: exit code: 254
+Dockerfile failed to build error
+unsuccessful command 'flyctl deploy --build-only --push -a flashbot-2024 --image-label deployment-a04fa9d6d2abd4e130ed0af296b9fee8 --config fly.toml'
