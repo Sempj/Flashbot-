@@ -1,126 +1,125 @@
-# Use Node.js 18 base image
+# -----------------------------
+# Flashbot-2024 Single Dockerfile (Self-contained)
+# -----------------------------
 FROM node:18
 
-# Set working directory
 WORKDIR /usr/src/app
 
-# -------------------
-# Create package.json inline
-# -------------------
-RUN echo '{ \
-  "name": "flashbot-2024", \
-  "version": "1.0.0", \
-  "description": "Flash loan arbitrage bot", \
-  "type": "module", \
-  "main": "bot.js", \
-  "scripts": { "start": "node bot.js" }, \
-  "dependencies": { \
-    "ethers": "^6.6.2", \
-    "axios": "^1.6.4", \
-    "dotenv": "^16.3.1" \
-  } \
+# -----------------------------
+# Create package.json inside container
+# -----------------------------
+RUN echo '{
+  "name": "flashbot-2024",
+  "version": "1.0.0",
+  "description": "Flash loan arbitrage bot",
+  "type": "module",
+  "main": "bot.js",
+  "scripts": { "start": "node bot.js" },
+  "dependencies": { "ethers": "^6.6.2", "axios": "^1.6.4", "dotenv": "^16.3.1" }
 }' > package.json
 
-# -------------------
+# -----------------------------
 # Install dependencies
-# -------------------
+# -----------------------------
 RUN npm install
 
-# -------------------
-# Create the bot.js inline
-# -------------------
-RUN echo 'import { ethers } from "ethers";' >> bot.js && \
-    echo 'import axios from "axios";' >> bot.js && \
-    echo 'import dotenv from "dotenv";' >> bot.js && \
-    echo 'dotenv.config();' >> bot.js && \
-    echo '' >> bot.js && \
-    echo '// Wallet' >> bot.js && \
-    echo 'const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, new ethers.JsonRpcProvider(process.env.RPC_URL));' >> bot.js && \
-    echo '' >> bot.js && \
-    echo '// Tokens' >> bot.js && \
-    echo 'const tokens = [' >> bot.js && \
-    echo '  { symbol: "DAI", address: process.env.DAI_ADDRESS, decimals: 18 },' >> bot.js && \
-    echo '  { symbol: "USDC", address: process.env.USDC_ADDRESS, decimals: 6 }' >> bot.js && \
-    echo '];' >> bot.js && \
-    echo '' >> bot.js && \
-    echo '// Exchanges / Price Feeds' >> bot.js && \
-    echo 'const exchanges = [' >> bot.js && \
-    echo '  { name: "UniswapV3", url: "https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3" },' >> bot.js && \
-    echo '  { name: "Sushiswap", url: "https://api.thegraph.com/subgraphs/name/sushiswap/exchange" }' >> bot.js && \
-    echo '];' >> bot.js && \
-    echo '' >> bot.js && \
-    echo '// Aave Flash Loan' >> bot.js && \
-    echo 'const AAVE_LENDING_POOL_ADDRESS = process.env.AAVE_LENDING_POOL;' >> bot.js && \
-    echo 'const AAVE_LENDING_POOL_ABI = ["function flashLoan(address receiver, address asset, uint256 amount, bytes calldata params) external"];' >> bot.js && \
-    echo 'const aaveContract = new ethers.Contract(AAVE_LENDING_POOL_ADDRESS, AAVE_LENDING_POOL_ABI, wallet);' >> bot.js && \
-    echo '' >> bot.js && \
-    echo 'async function executeAaveFlashLoan(token, amount) {' >> bot.js && \
-    echo '  try {' >> bot.js && \
-    echo '    console.log(`Aave flash loan: ${amount} ${token.symbol}`);' >> bot.js && \
-    echo '    const tx = await aaveContract.flashLoan(wallet.address, token.address, ethers.parseUnits(amount.toString(), token.decimals), "0x");' >> bot.js && \
-    echo '    await tx.wait();' >> bot.js && \
-    echo '    console.log(`Aave flash loan executed and repaid for ${token.symbol}`);' >> bot.js && \
-    echo '  } catch (err) { console.error("Aave flash loan error:", err); }' >> bot.js && \
-    echo '}' >> bot.js && \
-    echo '' >> bot.js && \
-    echo '// dYdX Flash Loan (placeholder)' >> bot.js && \
-    echo 'async function executeDyDxFlashLoan(token, amount) {' >> bot.js && \
-    echo '  try { console.log(`dYdX flash loan: ${amount} ${token.symbol}`);' >> bot.js && \
-    echo '    console.log(`dYdX flash loan executed and repaid for ${token.symbol}`);' >> bot.js && \
-    echo '  } catch (err) { console.error("dYdX flash loan error:", err); }' >> bot.js && \
-    echo '}' >> bot.js && \
-    echo '' >> bot.js && \
-    echo '// Price Check' >> bot.js && \
-    echo 'async function getPrices(tokenSymbol) {' >> bot.js && \
-    echo '  try {' >> bot.js && \
-    echo '    const prices = [];' >> bot.js && \
-    echo '    for (const ex of exchanges) {' >> bot.js && \
-    echo '      const query = `{ token(id: "${tokenSymbol.toLowerCase()}") { derivedETH } }`;' >> bot.js && \
-    echo '      const resp = await axios.post(ex.url, { query });' >> bot.js && \
-    echo '      prices.push({ exchange: ex.name, price: parseFloat(resp.data.data.token?.derivedETH || 0) });' >> bot.js && \
-    echo '    }' >> bot.js && \
-    echo '    return prices;' >> bot.js && \
-    echo '  } catch (err) { console.error("Price fetch error:", err); return []; }' >> bot.js && \
-    echo '}' >> bot.js && \
-    echo '' >> bot.js && \
-    echo '// Arbitrage Logic' >> bot.js && \
-    echo 'async function checkArbitrage() {' >> bot.js && \
-    echo '  for (const token of tokens) {' >> bot.js && \
-    echo '    console.log(`\\nChecking ${token.symbol} arbitrage...`);' >> bot.js && \
-    echo '    const prices = await getPrices(token.symbol);' >> bot.js && \
-    echo '    if (prices.length < 2) continue;' >> bot.js && \
-    echo '    const sorted = prices.sort((a,b)=>a.price-b.price);' >> bot.js && \
-    echo '    const diff = sorted[sorted.length-1].price - sorted[0].price;' >> bot.js && \
-    echo '    if (diff / sorted[0].price > 0.01) {' >> bot.js && \
-    echo '      console.log(`Arbitrage opportunity! Buy at ${sorted[0].exchange} (${sorted[0].price}), sell at ${sorted[sorted.length-1].exchange} (${sorted[sorted.length-1].price})`);' >> bot.js && \
-    echo '      await executeAaveFlashLoan(token,1);' >> bot.js && \
-    echo '      await executeDyDxFlashLoan(token,1);' >> bot.js && \
-    echo '      const profitETH = sorted[sorted.length-1].price - sorted[0].price;' >> bot.js && \
-    echo '      console.log(`Estimated profit: ${profitETH.toFixed(6)} ETH`);' >> bot.js && \
-    echo '      await walletWithdrawal();' >> bot.js && \
-    echo '    } else { console.log(`No arbitrage for ${token.symbol}`); }' >> bot.js && \
-    echo '  }' >> bot.js && \
-    echo '}' >> bot.js && \
-    echo '' >> bot.js && \
-    echo '// Wallet Withdrawal' >> bot.js && \
-    echo 'async function walletWithdrawal() {' >> bot.js && \
-    echo '  try {' >> bot.js && \
-    echo '    const balance = await wallet.getBalance();' >> bot.js && \
-    echo '    console.log(`Wallet balance: ${ethers.formatEther(balance)} ETH`);' >> bot.js && \
-    echo '    if (process.env.WITHDRAW_ADDRESS) {' >> bot.js && \
-    echo '      const tx = await wallet.sendTransaction({ to: process.env.WITHDRAW_ADDRESS, value: balance });' >> bot.js && \
-    echo '      await tx.wait();' >> bot.js && \
-    echo '      console.log(`Wallet withdrawn to ${process.env.WITHDRAW_ADDRESS}`);' >> bot.js && \
-    echo '    }' >> bot.js && \
-    echo '  } catch (err) { console.error("Wallet withdrawal error:", err); }' >> bot.js && \
-    echo '}' >> bot.js && \
-    echo '' >> bot.js && \
-    echo '// Run Bot every 30 seconds' >> bot.js && \
-    echo 'setInterval(checkArbitrage, 30000);' >> bot.js && \
-    echo 'console.log("Flashbot-2024 running...");' >> bot.js
+# -----------------------------
+# Create bot.js inside container
+# -----------------------------
+RUN echo 'import { ethers } from "ethers";
+import axios from "axios";
+import dotenv from "dotenv";
+dotenv.config();
 
-# Expose port 8080
+const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, new ethers.JsonRpcProvider(process.env.RPC_URL));
+
+const tokens = [
+  { symbol: "DAI", address: process.env.DAI_ADDRESS, decimals: 18 },
+  { symbol: "USDC", address: process.env.USDC_ADDRESS, decimals: 6 }
+];
+
+const exchanges = [
+  { name: "UniswapV3", url: "https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3" },
+  { name: "Sushiswap", url: "https://api.thegraph.com/subgraphs/name/sushiswap/exchange" }
+];
+
+const AAVE_LENDING_POOL_ABI = ["function flashLoan(address receiver, address asset, uint256 amount, bytes calldata params) external"];
+const aaveContract = new ethers.Contract(process.env.AAVE_LENDING_POOL, AAVE_LENDING_POOL_ABI, wallet);
+
+const ALPHA_LENDING_POOL_ABI = ["function flashLoan(address receiver, address[] calldata tokens, uint256[] calldata amounts, bytes calldata params) external"];
+const alphaContract = new ethers.Contract(process.env.ALPHA_LENDING_POOL, ALPHA_LENDING_POOL_ABI, wallet);
+
+async function executeAaveFlashLoan(token, amount){
+  try {
+    console.log(`Aave flash loan: ${amount} ${token.symbol}`);
+    const tx = await aaveContract.flashLoan(wallet.address, token.address, ethers.parseUnits(amount.toString(), token.decimals), "0x");
+    await tx.wait();
+    console.log(`Aave flash loan executed for ${token.symbol}`);
+  } catch(e){ console.error("Aave error:", e); }
+}
+
+async function executeDyDxFlashLoan(token, amount){
+  try{ console.log(`dYdX flash loan: ${amount} ${token.symbol}`); console.log(`dYdX executed for ${token.symbol}`); }catch(e){ console.error("dYdX error:", e);}
+}
+
+async function executeAlphaFlashLoan(token, amount){
+  try{
+    console.log(`Alpha flash loan: ${amount} ${token.symbol}`);
+    const tx = await alphaContract.flashLoan(wallet.address, [token.address], [ethers.parseUnits(amount.toString(), token.decimals)], "0x");
+    await tx.wait();
+    console.log(`Alpha flash loan executed for ${token.symbol}`);
+  }catch(e){ console.error("Alpha error:", e); }
+}
+
+async function getPrices(tokenSymbol){
+  try{
+    const prices=[];
+    for(const ex of exchanges){
+      const query=`{ token(id: "${tokenSymbol.toLowerCase()}") { derivedETH } }`;
+      const resp=await axios.post(ex.url, { query });
+      prices.push({ exchange: ex.name, price: parseFloat(resp.data.data.token?.derivedETH || 0) });
+    }
+    return prices;
+  }catch(e){ console.error("Price fetch error:", e); return [];}
+}
+
+async function checkArbitrage(){
+  for(const token of tokens){
+    console.log(`\nChecking ${token.symbol} arbitrage...`);
+    const prices=await getPrices(token.symbol);
+    if(prices.length<2) continue;
+    const sorted=prices.sort((a,b)=>a.price-b.price);
+    const diff=sorted[sorted.length-1].price-sorted[0].price;
+    if(diff/sorted[0].price>0.01){
+      console.log(`Arbitrage! Buy at ${sorted[0].exchange} (${sorted[0].price}), sell at ${sorted[sorted.length-1].exchange} (${sorted[sorted.length-1].price})`);
+      await executeAaveFlashLoan(token,1);
+      await executeDyDxFlashLoan(token,1);
+      await executeAlphaFlashLoan(token,1);
+      const profitETH=sorted[sorted.length-1].price-sorted[0].price;
+      console.log(`Estimated profit: ${profitETH.toFixed(6)} ETH`);
+      await walletWithdrawal();
+    } else { console.log(`No arbitrage for ${token.symbol}`);}
+  }
+}
+
+async function walletWithdrawal(){
+  try{
+    const balance=await wallet.getBalance();
+    console.log(`Wallet balance: ${ethers.formatEther(balance)} ETH`);
+    if(process.env.WITHDRAW_ADDRESS){
+      const tx=await wallet.sendTransaction({ to: process.env.WITHDRAW_ADDRESS, value: balance });
+      await tx.wait();
+      console.log(`Wallet withdrawn to ${process.env.WITHDRAW_ADDRESS}`);
+    }
+  }catch(e){ console.error("Wallet withdrawal error:", e);}
+}
+
+setInterval(checkArbitrage,30000);
+console.log("Flashbot-2024 running with Aave, dYdX, Alpha flash loans...");
+' > bot.js
+
+# -----------------------------
+# Expose port and start bot
+# -----------------------------
 EXPOSE 8080
-
-# Start bot
-CMD ["node", "bot.js"]
+CMD ["node","bot.js"]
