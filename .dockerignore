@@ -1,26 +1,24 @@
-# Dependency/Build Directories
-node_modules
-npm-debug.log
-.npm
+app = "flashbot-2024"
+primary_region = "iad"
 
-# Project Files
-.git
-.gitignore
-.dockerignore
-Dockerfile
-fly.toml # Fly.io configuration file
+[build]
+  dockerfile = "Dockerfile"
 
-# Environment / Configuration Files
-.env
-.DS_Store
-*.log
+[http_service]
+  internal_port = 8080
+  force_https = false
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
 
-# Development / Testing files and directories
-test
-tests
-docs
-coverage
-tmp
-*~
-dist
-build
+[env]
+  PORT = "8080"
+
+[deploy]
+  strategy = "rolling"
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
